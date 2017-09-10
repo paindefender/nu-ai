@@ -10,9 +10,9 @@
 
 (defun PRINTINREVERSEORDER (elements)
 	(cond 
-		((not (null elements)) 
-			(print (car (reverse elements))) 
-			(PRINTINREVERSEORDER (butlast elements)) 
+		((not (null elements))
+			(PRINTINREVERSEORDER (cdr elements))
+			(print (car elements)) 
 		)
 	)
 ) ;Task 4
