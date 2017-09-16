@@ -100,22 +100,18 @@
 
 ;tree searching functions
 (defun search_tree (tree start switch)
-	(print tree)
-	(print start)
-	(print switch)
-)
-(defun find_subtree (tree node)
 	(cond 
-		((not (null tree))
-			(find_subtree (car tree) node)
-			(find_subtree (cdr tree) node)
-		))
+		((= switch 0)
+			(print_tree_bfs (print_tree_f tree start))
+		)
+		((= switch 1)
+			(print_tree (print_tree_f tree start))
+		)
+		(t (print "Switch should be either 0(bfs) or 1(dfs)"))
+	)
 )
 (defun print_children_f (tree node)
-	(cond 	
-		((eq (car tree) node)
-			(print tree)
-		)
+	(cond
 		((not (null tree)) 
 			(print_children_f (cdr tree) node)
 		)
@@ -124,9 +120,17 @@
 (defun use_children_f (tree node)
 	(cond
 		((not (null tree))
-			(cond )
-			(print_tree_f (car tree) node)
-			(use_children_f (cdr tree) node)
+			(cond 
+				((not (null (print_tree_f (car tree) node)))
+					(print_tree_f (car tree) node)
+				)
+				(t 
+					;(print (print_tree_f (car tree) node))
+					;(print "going into use_children_f")
+					(use_children_f (cdr tree) node)
+				)
+			)
+			
 		))
 )
 (defun print_tree_f (tree node) 
@@ -134,7 +138,8 @@
 		((not (null tree)) 
 			(cond 
 				((eq (car tree) node) 
-					(print tree)
+					;(print "printing from print tree f")
+					tree
 				)
 				(t 
 					(print_children_f (cdr tree) node)
