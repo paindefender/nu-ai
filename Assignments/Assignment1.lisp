@@ -67,7 +67,6 @@
 		)
 		(t (trim_first tree))
 	)
-	;(trim_first (remove_parentheses tree))
 )
 (defun remove_parentheses (tree)
 	(cond
@@ -145,8 +144,6 @@
 					(print_tree_f (car tree) node)
 				)
 				(t 
-					;(print (print_tree_f (car tree) node))
-					;(print "going into use_children_f")
 					(use_children_f (cdr tree) node)
 				)
 			)
@@ -157,8 +154,7 @@
 	(cond 	
 		((not (null tree)) 
 			(cond 
-				((eq (car tree) node) 
-					;(print "printing from print tree f")
+				((eq (car tree) node)
 					tree
 				)
 				(t 
