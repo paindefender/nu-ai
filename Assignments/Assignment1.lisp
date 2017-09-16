@@ -1,3 +1,23 @@
+; Documentation
+; For unweighted trees:
+; 	* (print_tree tree) for printing in DFS order
+;	* (print_tree_bfs tree) for printing in BFS order
+;	* (search_tree tree start_node switch) for searching
+;		switch takes one of two values:
+;			* 0 - BFS ordering
+;			* 1 - DFS ordering
+;
+;	Examples:
+;		(print_tree '(A (B (J)) (C (F) (R (M))) (D (L))))
+;		(print_tree_bfs '(A (B (J)) (C (F) (R (M))) (D (L))))
+;		(search_tree '(A (B (J)) (C (F) (R (M))) (D (L))) 'C 0)
+;
+; For weighted trees:
+;	* (print_tree_w tree) for printing in DFS order
+;
+;	Examples:
+;		(print_tree_w '((a 0) ((b 3) ((d 1)) ((e 2) ((h 3)) ((i 5))) ((f 3))) ((c 4) ((g 4)))))
+
 ; tree printing dfs functions
 (defun print_children (tree)
 	(cond 	
@@ -149,3 +169,30 @@
 		))
 )
 ;tree searching functions end
+
+;dfs printing for weighted trees
+(defun print_children_w (tree)
+	(cond 	
+		((not (null tree)) 
+			(format t " ~A " (car tree))
+			(print_children_w (cdr tree))
+		)
+		(t (format t "|~%"))
+	)
+)
+(defun use_children_w (tree)
+	(cond
+		((not (null tree))
+			(print_tree_w (car tree))
+			(use_children_w (cdr tree))
+		))
+)
+(defun print_tree_w (tree) 
+	(cond 	
+		((not (null tree)) 
+			(format t "> ~A" (car tree))
+			(format t " --> |")
+			(print_children_w (cdr tree))
+			(use_children_w (cdr tree))
+		))
+)
