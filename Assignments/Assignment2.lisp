@@ -46,8 +46,6 @@
     )
 )
 
-
-
 (defun getsldentry (city slds)
 	(cond
 		((null slds) "NOT FOUND")
@@ -58,11 +56,8 @@
 	)
 )
 
-
-
 (defun find_bucharest (st_city) ; takes starting city as an argument
-	(setq frontier (list (append (getsldentry st_city straight) '(0))))
-	
+	(setq frontier (list (append (getsldentry st_city straight) '(0) '(0))))
 	(start_search frontier)
 )
 
@@ -73,17 +68,17 @@
 	)
 )
 
-(defun get-min (frontier min_val) ; set min-val to something like ("Dummy" 999999) 
+(defun get-min (frontier min_val) ; set min-val to something like ("Dummy" 999999 999999 999999) 
   (cond ((null (car frontier)) min_val)
-        ((< (car (cdr (car frontier))) (car (cdr min_val))) (get-min (cdr frontier) (car frontier)))
+        ((< (+ (car (cdr (cdr (car frontier)))) (car (cdr (cdr (cdr (car frontier)))))) (+ (car (cdr (cdr min_val))) (car (cdr (cdr (cdr min_val)))))) (get-min (cdr frontier) (car frontier)))
         (t (get-min (cdr frontier) min_val)))
 )
-(defun frontier_min (frontier) (get-min frontier '("Dummy" 999999)))
+(defun frontier_min (frontier) (get-min frontier '("Dummy" 999999 999999 999999)))
 
 (defun nodes_calculate (parent children)
 	(cond ((not (null children))
 		(setq path (+ (car (cdr (car children))) (car (cdr (cdr parent)))))
-		(setf (car (cdr (car children))) (car (cdr (getsldentry (car (car children)) straight))))
+		(setf (car children) (append (car children) (list (car (cdr (getsldentry (car (car children)) straight))))))
 		(setf (car children) (append (car children) (list path)))
 		(nodes_calculate parent (cdr children))
 		children
@@ -93,13 +88,11 @@
 (defun exp_frontier (frontier)
 	;(format t "Expanding frontier...~%")
 	(setq fr_min (frontier_min frontier))
-	(format t "~A expanded...~%" fr_min)
+	(format t "~A expanded...~%" fr_min) 
 	(setq new_nodes (cdr (getsldentry (car fr_min) cities)))
-	(append (remove fr_min frontier) (nodes_calculate fr_min new_nodes))
+	(append (remove fr_min frontier) (nodes_calculate fr_min (copy-list new_nodes)))
 )
 
-(defun check_frontier (frontier) ; Checks if Bucharest is inside the frontier
-	(cond ((not (null frontier))
-		(cond ((string= (car (car frontier)) "Bucharest") (format t "Found Bucharest, total distance: ~A" (car (cdr (cdr (car frontier))))) t) (t (check_frontier (cdr frontier)))))
-	(t nil))
+(defun check_frontier (frontier)
+	(cond ((string= (car (frontier_min frontier)) "Bucharest") (format t "~A" (frontier_min frontier)) t))
 )
