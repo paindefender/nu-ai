@@ -77,7 +77,7 @@
 
 (defun nodes_calculate (parent children)
 	(cond ((not (null children))
-		(setq path (+ (car (cdr (car children))) (car (cdr (cdr parent)))))
+		(setq path (+ (car (cdr (car children))) (car (cdr (cdr (cdr parent))))))
 		(setf (car children) (append (car children) (list (car (cdr (getsldentry (car (car children)) straight))))))
 		(setf (car children) (append (car children) (list path)))
 		(nodes_calculate parent (cdr children))
