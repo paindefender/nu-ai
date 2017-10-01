@@ -1,3 +1,16 @@
+# Documentation
+#
+# Main functions(methods)
+#	maze = ContentMaze(N, K, k, p) to initialize a maze
+# 	maze.construct() to construct the graph
+# 	maze.populate(Walls, Pits, Gold, Monsters, Wind Decay, Smell Decay) to populate the maze
+# 	maze.info(cell) to print info about one cell
+#
+# Additional methods
+#	maze.graphvizify() to get a graph representation compatible with http://graphs.grevian.org
+# 	maze.print_maze() to print the info about all cells
+#	maze.propagate(Cell, Decay, Property) to propagate a certain property through the graph
+
 from random import randint
 
 class Maze(object):
@@ -15,11 +28,9 @@ class Maze(object):
         
         # Create list of remaining weights
         r_weights = [self.k] * self.K + [self.p] * (self.N - self.K)
-#         print(r_weights)
         
         # Validity of using the node for connection
         node_validity = [x != 0 for x in r_weights]
-#         print(node_validity)
         
         while any(node_validity):
             
@@ -54,11 +65,8 @@ class Maze(object):
             # Decrease the required weight and connect the nodes
             r_weights[req_edges_max_i]-=1
             r_weights[req_edges_min_i]-=1
-#             print(req_edges_max_i, req_edges_min_i)
             self.graph[req_edges_max_i].append(req_edges_min_i)
             self.graph[req_edges_min_i].append(req_edges_max_i)
-            
-#             print(r_weights)
                 
             node_validity = [x != 0 for x in r_weights]
     
@@ -97,10 +105,12 @@ class ContentMaze(Maze):
         for i in self.graph[cell]:
                 self.propagate(i, decay, prop, parent=self.properties[cell][prop])
     
-    def populate(self, W, P, G, M, w_decay, s_decay):
+    def populate(self, W, P, G, M, w_decay, s_decay): # Walls, Pits, Gold, Monsters, Wind Decay, Smell Decay
         if W + P + G + M > self.N:
             raise ValueError("Not enough nodes to populate!")
-            
+        if w_decay > 1 or w_decay < 0 or s_decay > 1 or s_decay < 0:
+			raise ValueError("Decay should be a real number between 0 and 1") 
+        
         available = [x for x in range(0, self.N)] 
         
         for i in range(0, W):
@@ -125,7 +135,7 @@ class ContentMaze(Maze):
             del available[index]
     
     def info(self, cell):
-		print(str(cell) + ' ' + str(self.contents[cell]) + ' wind: ' + str(self.properties[cell]['wind']) + ', smell: ' + str(self.properties[cell]['smell']) + ' ->'),
+		print(str(cell) + ' ' + str(self.contents[cell]) + ', wind: ' + str(self.properties[cell]['wind']) + ', smell: ' + str(self.properties[cell]['smell']) + ' ->'),
 		for j in range(0, len(self.graph[cell])):
 			print(' ' + str(self.graph[cell][j])),
 		print('\n')
@@ -134,7 +144,9 @@ class ContentMaze(Maze):
         for i in range(0, self.N):
             self.info(i)
 
-a = ContentMaze(4, 3, 2, 2)
+# Example
+a = ContentMaze(10,4,3,6)
 a.construct()
-a.populate(1,1,1,1,0.3,0.1)
+print(a.graphvizify())
+a.populate(1,1,1,1,0.8,0.5)
 a.print_maze()
