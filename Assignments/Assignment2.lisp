@@ -1,3 +1,4 @@
+; call (find_bucharest "city_name") 
 (setq cities '(
         ("Bucharest"         ("Pitesti"             101    )         ("Fagaras"             211    )         ("Giurgiu"             90    )         ("Urziceni" 85    )    )
         ("Sibiu"             ("Arad"             140    )         ("Oradea"             151    )         ("Rimnicu Vilcea"     80    )         ("Fagaras" 99    )    )
