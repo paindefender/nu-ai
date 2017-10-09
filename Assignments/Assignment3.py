@@ -10,8 +10,13 @@
 #	maze.graphvizify() to get a graph representation compatible with http://graphs.grevian.org
 # 	maze.print_maze() to print the info about all cells
 #	maze.propagate(Cell, Decay, Property) to propagate a certain property through the graph
+#
+# Additional Assignment 3 functions
+#   maze = ClockedContentMaze(N, K, k, p, tau=0.1) to create a maze with a clock
+#   maze.tick() to start one tick
 
 from random import randint
+import math
 
 class Maze(object):
     def __init__(self, N, K, k, p):
@@ -109,7 +114,7 @@ class ContentMaze(Maze):
         if W + P + G + M > self.N:
             raise ValueError("Not enough nodes to populate!")
         if w_decay > 1 or w_decay < 0 or s_decay > 1 or s_decay < 0:
-			raise ValueError("Decay should be a real number between 0 and 1") 
+            raise ValueError("Decay should be a real number between 0 and 1") 
         
         available = [x for x in range(0, self.N)] 
         
@@ -135,18 +140,131 @@ class ContentMaze(Maze):
             del available[index]
     
     def info(self, cell):
-		print(str(cell) + ' ' + str(self.contents[cell]) + ', wind: ' + str(self.properties[cell]['wind']) + ', smell: ' + str(self.properties[cell]['smell']) + ' ->'),
-		for j in range(0, len(self.graph[cell])):
-			print(' ' + str(self.graph[cell][j])),
-		print('\n')
+        print(str(cell) + ' ' + str(self.contents[cell]) + ', wind: ' + str(self.properties[cell]['wind']) + ', smell: ' + str(self.properties[cell]['smell']) + ' ->'),
+        for j in range(0, len(self.graph[cell])):
+            print(' ' + str(self.graph[cell][j])),
+        print('')
     
     def print_maze(self):
         for i in range(0, self.N):
             self.info(i)
 
+class ClockedContentMaze(ContentMaze):
+    def __init__(self, N, K, k, p, tau = 0.1):
+        self.clock = 0
+        self.wind = [0]*N
+        self.smell = [0]*N
+        self.monster_smell_history = [0]*N # Smell that monsters leave after themselves
+        self.monster = [0]*N # How much monsters in each node
+        self.monster_wait = [0]*N # How long each monster is waiting
+        self.tau = tau # smell temporal constraint
+        super(ClockedContentMaze, self).__init__(N, K, k, p)
+    
+    def populate(self, W, P, G, M, w_decay, s_decay):
+        super(ClockedContentMaze, self).populate(W, P, G, M, w_decay, s_decay)
+        self.s_decay = s_decay
+        for i in range(0, self.N):
+            self.wind[i] = self.properties[i]['wind']
+            self.smell[i] = self.properties[i]['smell']
+            self.monster = [0]*self.N
+            for i in range(0, self.N):
+                if self.contents[i] == 'Monster':
+                    self.monster[i] = 1
+    
+    def tick(self):
+        print(self.monster_wait)
+        # Recalculate wind
+        for i in range(0, self.N):
+            self.wind[i] = self.properties[i]['wind'] * abs(math.cos(math.pi/180 * self.clock))
+        
+        #TODO: Move Monsters
+        monster_temp = [x for x in self.monster]
+        double = [False] * self.N # Double source smell or not
+        for i in range(0, self.N):
+            best_node = {'node':0, 'priority':-1}
+            if self.monster[i] > 0:
+                #Get neighbors
+                for j in self.graph[i]:
+                    # Higher priority is better
+                    # priority 0 - monster feels smell and smell is higher than the wind (Wait 15)
+                    # priority 1 - monster cannot smell any smell (Wait 3)
+                    # priority 2 - monster feels smell and smell is lower than wind (Go immediately)
+                    
+                    if self.smell[j] > 0.6:
+                        # priorities 0 and 2
+                        if self.smell[j] < self.wind[j]:
+                            # priority 2
+                            if best_node['priority'] < 2:
+                                best_node['node'] = j
+                                best_node['priority'] = 2
+                        else:
+                            # priority 0
+                            if self.monster_wait[i] >= 15:
+                                if best_node['priority'] < 0:
+                                    best_node['node'] = j
+                                    best_node['priority'] = 0
+                    else: 
+                        # priority 1
+                        if self.monster_wait[i] >= 3:
+                            if best_node['priority'] < 1:
+                                best_node['node'] = j
+                                best_node['priority'] = 1
+                # Destination determined
+                if best_node['priority'] >= 0:
+                    self.monster_wait[i] = 0
+                    # Move the monster(s)
+                    if self.contents[best_node['node']] == 'Wall': # Wall or Pit encountered
+                        double[best_node['node']]
+                    elif self.contents[best_node['node']] == 'Pit':
+                        self.monster_smell_history = [0] * self.N
+                    else: # Not (Wall or Pit)
+                        print("Moving " + str(i) + " to " + str(best_node['node']))
+                        monster_temp[i] -= self.monster[i]
+                        monster_temp[best_node['node']] += self.monster[i]
+                        self.monster_smell_history[i] = 1
+                else:
+                    self.monster_wait[i] += 1
+        self.monster = [x for x in monster_temp]
+        # Propagate smell with new monster coordinates
+        self.smell = [0]*self.N
+        for i in range(0, self.N):
+            if self.monster[i] > 0:
+                self.smell[i] = (2 if double[i] else 1)
+                self.propagate_smell(i, self.s_decay)
+        
+        # Reduce the aftersmell / Merge aftersmell with smell
+        for i in range(0, self.N):
+            if self.smell[i] < self.monster_smell_history[i]:
+                self.monster_smell_history[i] -= self.tau
+            if self.smell[i] < self.monster_smell_history[i]:
+                self.smell[i] = self.monster_smell_history[i]
+        
+        self.clock += 1
+    
+    def propagate_smell(self, cell, decay, parent=-1):
+        if self.contents[cell] == 'Wall':
+            return
+        if parent != -1:
+            if self.smell[cell] >= parent*decay:
+                return
+            else:
+                self.smell[cell] = parent*decay
+        else:
+            self.smell[cell] = 1
+        for i in self.graph[cell]:
+                self.propagate_smell(i, decay, parent=self.smell[cell])
+    
+    def info(self, cell):
+        print(str(cell) + ' ' + ('None' if self.contents[cell] == 'Monster' else str(self.contents[cell])) + ((' ' + str(self.monster[cell]) + ' monster(s)') if self.monster[cell]>0 else '') + ' wind: ' + str(self.wind[cell]) + ', smell: ' + str(self.smell[cell]) + ' ->'),
+        for j in range(0, len(self.graph[cell])):
+            print(' ' + str(self.graph[cell][j])),
+        print('')
+
 # Example
-a = ContentMaze(10,4,3,6)
+a = ClockedContentMaze(10, 3, 2, 2, tau=0.05)
 a.construct()
-print(a.graphvizify())
-a.populate(1,1,1,1,0.8,0.5)
-a.print_maze()
+a.populate(1,1,1,1,0.3,0.8)
+
+for i in range(0,20):
+    a.print_maze()
+    a.tick()
