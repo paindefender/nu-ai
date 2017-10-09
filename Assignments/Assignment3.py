@@ -214,7 +214,7 @@ class ClockedContentMaze(ContentMaze):
                     self.monster_wait[i] = 0
                     # Move the monster(s)
                     if self.contents[best_node['node']] == 'Wall': # Wall or Pit encountered
-                        double[best_node['node']]
+                        double[i] = True
                     elif self.contents[best_node['node']] == 'Pit':
                         self.monster_smell_history = [0] * self.N
                     else: # Not (Wall or Pit)
@@ -231,7 +231,9 @@ class ClockedContentMaze(ContentMaze):
             if self.monster[i] > 0:
                 self.smell[i] = (2 if double[i] else 1)
                 self.propagate_smell(i, self.s_decay)
-        
+        for i in range(0, self.N):
+            if self.smell[i] > self.monster_smell_history[i]:
+                self.monster_smell_history[i] = self.smell[i]
         # Reduce the aftersmell / Merge aftersmell with smell
         for i in range(0, self.N):
             if self.smell[i] < self.monster_smell_history[i]:
@@ -249,8 +251,6 @@ class ClockedContentMaze(ContentMaze):
                 return
             else:
                 self.smell[cell] = parent*decay
-        else:
-            self.smell[cell] = 1
         for i in self.graph[cell]:
                 self.propagate_smell(i, decay, parent=self.smell[cell])
     
@@ -261,7 +261,7 @@ class ClockedContentMaze(ContentMaze):
         print('')
 
 # Example
-a = ClockedContentMaze(10, 3, 2, 2, tau=0.05)
+a = ClockedContentMaze(4, 3, 2, 2, tau=0.05)
 a.construct()
 a.populate(1,1,1,1,0.3,0.8)
 
