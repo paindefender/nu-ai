@@ -99,23 +99,25 @@ class ContentMaze(Maze):
         self.properties = [{'wind': 0, 'smell': 0} for x in range(0, N)]
         super(ContentMaze, self).__init__(N, K, k, p)
     
+    # Propagate wind and smell from cell
     def propagate(self, cell, decay, prop, parent=-1):
+#         print('going to ' + str(cell) + ". parent is " + str(parent))
         if self.contents[cell] == 'Wall':
             return
         if parent != -1:
             if self.properties[cell][prop] >= parent*decay:
                 return
             else:
+#                 print(parent*decay)
                 self.properties[cell][prop] = parent*decay
         for i in self.graph[cell]:
+#                 print(self.properties[cell][prop])
                 self.propagate(i, decay, prop, parent=self.properties[cell][prop])
     
-    def populate(self, W, P, G, M, w_decay, s_decay): # Walls, Pits, Gold, Monsters, Wind Decay, Smell Decay
+    def populate(self, W, P, G, M, w_decay, s_decay):
         if W + P + G + M > self.N:
             raise ValueError("Not enough nodes to populate!")
-        if w_decay > 1 or w_decay < 0 or s_decay > 1 or s_decay < 0:
-            raise ValueError("Decay should be a real number between 0 and 1") 
-        
+            
         available = [x for x in range(0, self.N)] 
         
         for i in range(0, W):
@@ -140,10 +142,10 @@ class ContentMaze(Maze):
             del available[index]
     
     def info(self, cell):
-        print(str(cell) + ' ' + str(self.contents[cell]) + ', wind: ' + str(self.properties[cell]['wind']) + ', smell: ' + str(self.properties[cell]['smell']) + ' ->'),
+        print(str(cell) + ' ' + str(self.contents[cell]) + ' wind: ' + str(self.properties[cell]['wind']) + ', smell: ' + str(self.properties[cell]['smell']) + ' ->'),
         for j in range(0, len(self.graph[cell])):
             print(' ' + str(self.graph[cell][j])),
-        print('')
+        print('\n')
     
     def print_maze(self):
         for i in range(0, self.N):
@@ -170,9 +172,13 @@ class ClockedContentMaze(ContentMaze):
             for i in range(0, self.N):
                 if self.contents[i] == 'Monster':
                     self.monster[i] = 1
+        
+        self.wp_jump = [0] * self.N # Wall Pit Jump variables
+        self.wp_jump_started = [False] * self.N
+        self.wp_jump_node = [-1] * self.N
     
     def tick(self):
-        print(self.monster_wait)
+#         print(self.monster_wait)
         # Recalculate wind
         for i in range(0, self.N):
             self.wind[i] = self.properties[i]['wind'] * abs(math.cos(math.pi/180 * self.clock))
@@ -183,6 +189,21 @@ class ClockedContentMaze(ContentMaze):
         for i in range(0, self.N):
             best_node = {'node':0, 'priority':-1}
             if self.monster[i] > 0:
+                
+                skip_t = False
+                if self.wp_jump_started[i]:
+                    # jump started
+                    self.wp_jump[i] += 1
+#                     print("Jump wait", self.wp_jump[i])
+                    if self.wp_jump[i] >= 3:
+                        self.monster_wait[i] = 0
+                        self.wp_jump_started[i] = False
+#                         print("Teleporting " + str(i) + " to " + str(self.wp_jump_node[i]))
+                        monster_temp[i] -= self.monster[i]
+                        monster_temp[self.wp_jump_node[i]] += self.monster[i]
+                        self.monster_smell_history[i] = 1
+                        skip_t = True        
+                
                 #Get neighbors
                 for j in self.graph[i]:
                     # Higher priority is better
@@ -210,20 +231,72 @@ class ClockedContentMaze(ContentMaze):
                                 best_node['node'] = j
                                 best_node['priority'] = 1
                 # Destination determined
-                if best_node['priority'] >= 0:
-                    self.monster_wait[i] = 0
+                if best_node['priority'] >= 0 and not self.wp_jump_started[i] and not skip_t:
+#                     print("Trying to move " + str(i) + " to " + str(best_node['node']))
+                    self.monster_wait[i] = 0        
                     # Move the monster(s)
                     if self.contents[best_node['node']] == 'Wall': # Wall or Pit encountered
                         double[i] = True
+                        if not self.wp_jump_started[i]:
+                            jump_nodes = self.min_smell_nodes()
+                            violations = [self.color(x)[0] for x in jump_nodes]
+#                             print(violations)
+                            v_bool = [x == 0 for x in violations]
+                            self.wp_jump_started[i] = True
+                            self.wp_jump[i] = 1
+                            if any(v_bool):
+                                for j in zip(v_bool, jump_nodes):
+                                    if j[0]:
+                                        self.wp_jump_node[i] = j[1]
+                                        self.monster_smell_history[j[1]] = max(self.monster_smell_history[j[1]], self.smell[j[1]]) * 4 + self.tau
+#                                         print("planning to jump to", self.wp_jump_node[i])
+                                        break
+                            else:
+#                                 print("doing probabilistic stuff")
+                                for i in range(0, len(violations)):
+                                    violations[i] /= sum(violations)
+                                    violations * randint(0, 10)
+                                self.wp_jump_node[i] = violations.index(max(violations))
+                                self.monster_smell_history[j[1]] = max(self.monster_smell_history[self.wp_jump_node[i]], self.smell[self.wp_jump_node[i]]) * 4 + self.tau
+#                                 print("planning to jump to", self.wp_jump_node[i])
+                                break
+                        else:
+                            skip_t = False
                     elif self.contents[best_node['node']] == 'Pit':
-                        self.monster_smell_history = [0] * self.N
+#                         self.monster_smell_history = [0] * self.N
+                        if not self.wp_jump_started[i]:
+                            jump_nodes = self.min_smell_nodes()
+                            violations = [self.color(x)[0] for x in jump_nodes]
+#                             print(violations)
+                            v_bool = [x == 0 for x in violations]
+                            if any(v_bool):
+                                self.wp_jump_started[i] = True
+                                self.wp_jump[i] = 1
+                                for j in zip(v_bool, jump_nodes):
+                                    if j[0]:
+                                        self.wp_jump_node[i] = j[1]
+                                        self.monster_smell_history[j[1]] = max(self.monster_smell_history[j[1]], self.smell[j[1]]) * 4 + self.tau
+#                                         print("planning to jump to", self.wp_jump_node[i])
+                                        break
+                            else:
+#                                 print("doing probabilistic stuff")
+                                for i in range(0, len(violations)):
+                                    violations[i] /= sum(violations)
+                                    violations * randint(0, 10)
+                                self.wp_jump_node[i] = violations.index(max(violations))
+                                self.monster_smell_history[j[1]] = max(self.monster_smell_history[self.wp_jump_node[i]], self.smell[self.wp_jump_node[i]]) * 4 + self.tau
+#                                 print("planning to jump to", self.wp_jump_node[i])
+                                break
+                        else:
+                            skip_t = False
                     else: # Not (Wall or Pit)
-                        print("Moving " + str(i) + " to " + str(best_node['node']))
+#                         print("Moving " + str(i) + " to " + str(best_node['node']))
                         monster_temp[i] -= self.monster[i]
                         monster_temp[best_node['node']] += self.monster[i]
                         self.monster_smell_history[i] = 1
                 else:
-                    self.monster_wait[i] += 1
+                    if not skip_t:
+                        self.monster_wait[i] += 1
         self.monster = [x for x in monster_temp]
         # Propagate smell with new monster coordinates
         self.smell = [0]*self.N
@@ -259,12 +332,163 @@ class ClockedContentMaze(ContentMaze):
         for j in range(0, len(self.graph[cell])):
             print(' ' + str(self.graph[cell][j])),
         print('')
+    
+    def color(self, node, max_colors = 4): # Uses same approach as discussed in class, but without backtracking and inference
+#         print("Graph is ", self.graph)
+        colors = [-1] * self.N # Map of colors
+        violations = 0
+        to_color = set(self.graph[node]).union(set([node])) # set of nodes that we are supposed to color
+#         print("Doing the color thing!")
+        
+        while True:
+#             print(to_color, colors)
+            # get set of minimum remaining values's
+            mrvs = set()
+            min_val = self.N
+            for i in to_color:
+                if colors[i] != -1:
+                    continue
+                p_set = set(range(0, max_colors)) # possible colors
+                adj_cols = set([colors[x] for x in self.graph[i]])
+                adj_cols.discard(-1)
+                _val = len(p_set.difference(adj_cols))
+                if (_val < min_val):
+                    mrvs = set()
+                    min_val = _val
+                if (_val == min_val):
+                    mrvs.add(i)
+#             print("Minimum Remaining Values: ", mrvs)
+            
+            node_to_color = -1
+            
+            if len(mrvs) > 1:
+                # pick using degree heuristic
+                dh = set()
+                max_degree = -1
+                for i in mrvs:
+                    degree_guy = len([x for x in self.graph[i] if x in to_color])
+                    if degree_guy > max_degree:
+                        dh = set()
+                        max_degree = degree_guy
+                    if degree_guy == max_degree:
+                        dh.add(i)
+#                 print("After degree heuristic", dh)
+                node_to_color = dh.pop()
+            else:
+                node_to_color = mrvs.pop()
+            
+#             print("Coloring", node_to_color)
+            
+            # Finding least constraining value
+            col_set = set(range(0, max_colors)) # possible colors
+            adj_cols = set([colors[x] for x in self.graph[node_to_color]])
+            adj_cols.discard(-1)
+            col_set = col_set.difference(adj_cols)
+#             print("Available colors", col_set)
+    
+            if len(col_set) == 0: # if no colors are allowed
+                # Make a violation!
+                violations += 1
+                col_set = set(range(0, max_colors)) # Allow all colors
+                
+            max_choices = -1
+            max_choices_color = -1
+            for i in col_set:
+                choices_sum = 0
+                for j in self.graph[node_to_color]:
+                    if j in to_color and colors[j] == -1:
+                        p_set = set(range(0, max_colors))# possible colors for adjacent guys
+                        p_set.discard(i)
+                        adj_cols = set([colors[x] for x in self.graph[j]])
+                        adj_cols.discard(-1)
+                        adj_cols.discard(i)
+#                         print(p_set.difference(adj_cols))
+                        _val = len(p_set.difference(adj_cols))
+                        choices_sum += _val
+                if choices_sum > max_choices:
+                    max_choices = choices_sum
+                    max_choices_color = i
+#             print("Color is", max_choices_color)
+            
+            colors[node_to_color] = max_choices_color
+            
+            left = [x for x in to_color if colors[x] == -1]
+#             print("Left to color:",left)
+            if len(left) < 1:
+                break;
+        return violations, colors
+    
+    def min_smell_nodes(self, n_nodes = 5): # n_nodes - max amount of returned nodes
+        # Sort nodes based on smell
+        sorted_nodes = [x for _,x in sorted(zip(self.smell, range(0, self.N)),  key=lambda pair: pair[0])]
+        # Remove walls and pits from it
+        sorted_nodes_ = [x for x in sorted_nodes if self.contents[x] != 'Wall' and self.contents[x] != 'Pit']
+        return sorted_nodes_[0:n_nodes]
+
+class AgentClockedContentMaze(ClockedContentMaze):
+    def __init__(self, N, K, k, p, tau = 0.1):
+        super(AgentClockedContentMaze, self).__init__(N, K, k, p, tau = tau)
+        self.agentseq = ''
+        self.end = False
+    
+    def populate(self, W, P, G, M, w_decay, s_decay):
+        super(AgentClockedContentMaze, self).populate(W, P, G, M, w_decay, s_decay)
+        # Choose a cell for the agent
+        available_cells = [i for i, x in enumerate(self.contents) if x == None]
+        self.agent = available_cells[randint(0, len(available_cells) - 1)]
+    
+    def tick(self):
+        super(AgentClockedContentMaze, self).tick()
+        
+        agent_adj_len = len(a.graph[self.agent])
+        agent_orientation = randint(0, agent_adj_len - 1)
+        agent_dest = a.graph[self.agent][agent_orientation]
+        counter = 0
+        
+        action = agent_orientation + 1
+        gold = 0
+        
+        if self.contents[self.agent] == 'Gold':
+            action = 0
+            gold = 1
+            self.end = True
+        
+        state = "R" + str(agent_adj_len) + ',' + str(self.wind[self.agent]) + ',' + str(self.smell[self.agent]) + ',' + str(gold) + ',' + str(action) + ';'
+        self.agentseq += state
+        
+        if self.contents[agent_dest] != 'Wall':
+            if action > 0:
+                self.agent = agent_dest # Go forward!
+        
+        if self.contents[self.agent] == 'Pit':
+            self.end = True
+        if self.monster[self.agent] > 0:
+            self.end = True
 
 # Example
-a = ClockedContentMaze(4, 3, 2, 2, tau=0.05)
-a.construct()
-a.populate(1,1,1,1,0.3,0.8)
 
-for i in range(0,20):
-    a.print_maze()
-    a.tick()
+#import copy
+a = AgentClockedContentMaze(60, 18, 2, 6, tau = 0.1)
+a.construct()
+a.populate(3, 5, 3, 3, 0.75, 0.75)
+print(a.contents)
+#print(a.agent)
+#agent_save = a.agent
+#backup = copy.deepcopy(a) # save the graph
+total = ''
+
+f = open("output.csv", "w")
+for i in range(10000):
+    b = AgentClockedContentMaze(60, 18, 2, 6, tau = 0.1)#copy.deepcopy(backup)
+    b.construct()
+    b.populate(3, 5, 3, 3, 0.75, 0.75)
+    #b.agent = agent_save
+    j = 0
+    while not b.end:
+        j += 1
+        if j > 10000:
+            break;
+        b.tick()
+    s = str(i) + ': ' + b.agentseq + '\n'
+    f.write(s)
+f.close()
